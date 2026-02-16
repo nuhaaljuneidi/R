@@ -92,8 +92,12 @@
             <div class="lg:col-span-6 space-y-6">
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-wrap gap-4 items-end">
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Temp Diff (ΔT °C)</label>
-                        <input type="number" id="deltaT" value="20" class="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm" onchange="calculate()">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">T_hot (°C)</label>
+                        <input type="number" id="Thot" value="20" class="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm" onchange="calculate()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">T_cold (°C)</label>
+                        <input type="number" id="Tcold" value="0" class="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm" onchange="calculate()">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Total Area (m²)</label>
@@ -140,7 +144,7 @@
                     <div class="space-y-4">
                         <div class="flex flex-col border-b pb-2">
                             <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider">Total R-Value</span>
-                            <span class="text-xl font-mono font-bold text-blue-600" id="res-r">0.000 m²·K/W</span>
+                            <span class="text-xl font-mono font-bold text-blue-600" id="res-r">0.000 K/W</span>
                         </div>
                         <div class="flex flex-col border-b pb-2">
                             <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider">U-Value</span>
@@ -386,86 +390,84 @@
           return div;
         }
 
-        function calculateTemperatures(breakdown, rTotal, deltaT) {
-          let currentTemp = deltaT;
+        function calculateTemperatures(breakdown, Rtotal, Thot, Tcold) {
+          const deltaT = Thot - Tcold;
+          let currentTemp = Thot;
           const tempData = [];
-          
+
           breakdown.forEach((layer, idx) => {
-            const layerDeltaT = (layer.R / rTotal) * deltaT;
+            const layerDeltaT = (layer.R / Rtotal) * deltaT;
             const startTemp = currentTemp;
             const endTemp = currentTemp - layerDeltaT;
-            
+
             tempData.push({
               layerIndex: idx,
-              startTemp: startTemp,
-              endTemp: endTemp,
+              startTemp,
+              endTemp,
               deltaT: layerDeltaT,
               name: layer.name,
               type: layer.type
             });
-            
+
             currentTemp = endTemp;
           });
-          
+
           return tempData;
         }
 
         function calculate() {
-          const deltaT = parseFloat(document.getElementById('deltaT').value) || 0;
+          const Thot = parseFloat(document.getElementById('Thot').value) || 0;
+          const Tcold = parseFloat(document.getElementById('Tcold').value) || 0;
+          const deltaT = Thot - Tcold;
           const totalArea = parseFloat(document.getElementById('totalArea').value) || 1;
 
-          let rTotal = 0;
+          let Rtotal = 0;
           const breakdown = [];
 
           assembly.forEach(item => {
             if (item.type === 'series') {
               const mat = matById(item.materialId);
-              let rpp = 0;
+              let R = 0;
               if (mat.isSurface) {
                 const h = getH(item);
-                rpp = (h > 0) ? (1 / h) : 0;
+                R = (h > 0 && totalArea > 0) ? 1 / (h * totalArea) : 0;   // K/W
               } else {
                 const k = getK(item);
                 const L = parseFloat(item.thickness) || 0;
-                rpp = (k > 0) ? (L / k) : 0;
+                R = (k > 0 && totalArea > 0) ? L / (k * totalArea) : 0;   // K/W
               }
-              rTotal += rpp;
-              breakdown.push({ type: 'series', name: mat.name, R: rpp, material: mat });
+              Rtotal += R;
+              breakdown.push({ type: 'series', name: mat.name, R: R, material: mat });
             } else {
-              const sumA = sumBranchAreas(item);
-              const areaOk = Math.abs(sumA - totalArea) < 1e-6;
-              const areaExceeded = sumA > totalArea + 1e-6;
+              let invRsum = 0;
 
-              let UA = 0;
               item.branches.forEach(b => {
                 const mat = matById(b.materialId);
                 const A = parseFloat(b.area) || 0;
                 if (A <= 0) return;
 
-                let rpp = 0;
+                let Rb = 0; // K/W
                 if (mat.isSurface) {
                   const h = getH(b);
-                  rpp = (h > 0) ? (1 / h) : 0;
+                  Rb = (h > 0) ? 1 / (h * A) : 0;
                 } else {
                   const k = getK(b);
                   const L = parseFloat(b.thickness) || 0;
-                  rpp = (k > 0) ? (L / k) : 0;
+                  Rb = (k > 0) ? L / (k * A) : 0;
                 }
 
-                if (rpp > 0) UA += (1 / rpp) * A;
+                if (Rb > 0) invRsum += 1 / Rb;
               });
 
-              if (UA > 0) {
-                const effectiveRpp = totalArea / UA;
-                rTotal += effectiveRpp;
+              if (invRsum > 0) {
+                const Req = 1 / invRsum; // K/W
+                Rtotal += Req;
 
                 breakdown.push({
                   type: 'parallel',
                   name: 'Parallel Group',
-                  R: effectiveRpp,
-                  areaSum: sumA,
-                  warnExceeded: areaExceeded,
-                  warnMismatch: !areaOk,
+                  R: Req,
+                  areaSum: sumBranchAreas(item),
                   details: item.branches.map(b => ({
                     name: materials.find(m => m.id === b.materialId).name,
                     area: parseFloat(b.area) || 0,
@@ -478,24 +480,26 @@
             }
           });
 
-          const uValue = rTotal > 0 ? 1 / rTotal : 0;
-          const q = uValue * totalArea * deltaT;
+          const uValue = (Rtotal > 0 && totalArea > 0) ? 1 / (Rtotal * totalArea) : 0;
+          const q = (Rtotal > 0) ? deltaT / Rtotal : 0;
           
-          const tempData = calculateTemperatures(breakdown, rTotal, deltaT);
+          const tempData = calculateTemperatures(breakdown, Rtotal, Thot, Tcold);
 
-          document.getElementById('res-r').textContent = rTotal.toFixed(3) + ' m²·K/W';
+          document.getElementById('res-r').textContent = Rtotal.toFixed(3) + ' K/W';
           document.getElementById('res-u').textContent = uValue.toFixed(3) + ' W/m²·K';
           document.getElementById('res-q').textContent = q.toFixed(1) + ' W';
           
           lastSolution = {
             timestamp: new Date().toISOString(),
             inputs: {
+              Thot,
+              Tcold,
               deltaT,
               totalArea,
               orientation: (document.getElementById('assemblyType')?.value) || 'wall'
             },
             results: {
-              R_total: rTotal,
+              R_total: Rtotal,
               U_value: uValue,
               Q_heat_loss_W: q
             },
@@ -506,7 +510,7 @@
               : JSON.parse(JSON.stringify(assembly))
           };
 
-          drawVisualization(breakdown, rTotal, lastSolution.inputs.orientation, tempData, deltaT);
+          drawVisualization(breakdown, Rtotal, lastSolution.inputs.orientation, tempData, Thot, Tcold);
           updateTemperaturePanel(tempData);
         }
 
@@ -534,12 +538,13 @@
           panel.innerHTML = html;
         }
 
-        function drawVisualization(breakdown, rTotal, orient, tempData, deltaT) {
+        function drawVisualization(breakdown, rTotal, orient, tempData, Thot, Tcold) {
             const canvas = document.getElementById('visualization');
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (!breakdown || rTotal <= 0) return;
             
+            const deltaT = Thot - Tcold;
             ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#111827'; ctx.fillText('Thermal Section Profile', 12, 22);
             
             const left = 20, top = 40;
@@ -776,7 +781,7 @@
           doc.text(lastSolution.results.R_total.toFixed(4), col1X, summaryY + 7);
           doc.setFontSize(8);
           doc.setTextColor(100, 100, 100);
-          doc.text('m²·K/W', col1X, summaryY + 12);
+          doc.text('K/W', col1X, summaryY + 12);
           
           // Column 2 - U-Value
           doc.setFont('helvetica', 'normal');
@@ -820,6 +825,18 @@
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(55, 65, 81);
           
+          doc.text(`Hot Side Temperature (T_hot):`, margin + 5, yPos);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${lastSolution.inputs.Thot.toFixed(1)} °C`, margin + 85, yPos);
+          yPos += 7;
+          
+          doc.setFont('helvetica', 'normal');
+          doc.text(`Cold Side Temperature (T_cold):`, margin + 5, yPos);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${lastSolution.inputs.Tcold.toFixed(1)} °C`, margin + 85, yPos);
+          yPos += 7;
+          
+          doc.setFont('helvetica', 'normal');
           doc.text(`Temperature Difference (ΔT):`, margin + 5, yPos);
           doc.setFont('helvetica', 'bold');
           doc.text(`${lastSolution.inputs.deltaT.toFixed(1)} °C`, margin + 85, yPos);
