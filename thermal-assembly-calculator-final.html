@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Thermal Assembly Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        .material-card { transition: all 0.2s; cursor: grab; }
+        .material-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .assembly-item { background: white; border: 2px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; position: relative; flex-shrink: 0; }
+        .parallel-group { background: #fffbeb; border: 2px dashed #f59e0b; border-radius: 0.75rem; padding: 1rem; flex-shrink: 0; }
+        .category { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; background: #fff; }
+        .category-summary { cursor: pointer; font-weight: 600; color: #374151; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+        .category-summary::-webkit-details-marker { display: none; }
+        .category-summary::after { content: "▾"; color: #6b7280; font-size: 12px; }
+        details[open] .category-summary::after { content: "▴"; }
+        .overflow-x-auto::-webkit-scrollbar { height: 8px; }
+        .overflow-x-auto::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .overflow-x-auto::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <header class="mb-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded-2xl shadow-xl p-8 text-white">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <h1 class="text-4xl font-bold mb-2">Thermal Assembly Designer</h1>
+                    <p class="text-blue-100 text-lg mb-4">Advanced heat transfer calculation for building envelope systems</p>
+                    <div class="flex flex-wrap items-center gap-6 text-sm">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
+                            </svg>
+                            <span class="font-medium">Developed by: Dr. Nuha Aljuneidi</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M6 6V5a3 3 0 013-3h2a3 3 0 013 3v1h2a2 2 0 012 2v3.57A22.952 22.952 0 0110 13a22.95 22.95 0 01-8-1.43V8a2 2 0 012-2h2zm2-1a1 1 0 011-1h2a1 1 0 011 1v1H8V5zm1 5a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clip-rule="evenodd"/>
+                                <path d="M2 13.692V16a2 2 0 002 2h12a2 2 0 002-2v-2.308A24.974 24.974 0 0110 15c-2.796 0-5.487-.46-8-1.308z"/>
+                            </svg>
+                            <span class="font-medium">SMART BUILDING ENERGY DYNAMICS LAB</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/20">
+                    <div class="text-xs text-blue-100 uppercase tracking-wider mb-1">Tool Version</div>
+                    <div class="text-xl font-bold">1.0</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Sidebar: Materials -->
+            <div class="lg:col-span-3 space-y-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-bold mb-4 flex items-center gap-2">Materials Library</h2>
+                    <input type="text" id="search" placeholder="Search materials..." 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md mb-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        oninput="filterMaterials(this.value)">
+                    
+                    <div class="max-h-[75vh] overflow-auto pr-2 space-y-3" id="material-categories">
+                        <details class="category" data-category="convection" open>
+                          <summary class="category-summary">Convection / Air</summary>
+                          <div class="mt-2 space-y-2" id="convection-materials"></div>
+                        </details>
+                        <details class="category" data-category="insulation" open>
+                          <summary class="category-summary">Insulation</summary>
+                          <div class="mt-2 space-y-2" id="insulation-materials"></div>
+                        </details>
+                        <details class="category" data-category="masonry">
+                          <summary class="category-summary">Masonry</summary>
+                          <div class="mt-2 space-y-2" id="masonry-materials"></div>
+                        </details>
+                        <details class="category" data-category="wood" open>
+                          <summary class="category-summary">Wood & Framing</summary>
+                          <div class="mt-2 space-y-2" id="wood-materials"></div>
+                        </details>
+                        <details class="category" data-category="other" open>
+                          <summary class="category-summary">Other</summary>
+                          <div class="mt-2 space-y-2" id="other-materials"></div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main: Builder Area -->
+            <div class="lg:col-span-6 space-y-6">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-wrap gap-4 items-end">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Temp Diff (ΔT °C)</label>
+                        <input type="number" id="deltaT" value="20" class="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm" onchange="calculate()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Total Area (m²)</label>
+                        <input type="number" id="totalArea" value="1" class="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm" onchange="renderAssembly(); calculate();">
+                    </div>
+
+                    <div class="ml-auto flex flex-wrap gap-2">
+                        <button onclick="addParallelGroup()" class="px-4 py-2 bg-amber-100 text-amber-700 rounded-md text-sm font-semibold hover:bg-amber-200 transition-colors">
+                            + Add Parallel Path
+                        </button>
+                        <button onclick="clearAssembly()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-md text-sm font-semibold hover:bg-gray-200 transition-colors">
+                            Clear
+                        </button>
+                    </div>
+                    
+                    <div class="w-full pt-2 border-t border-gray-100 flex flex-wrap items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs font-medium text-gray-600">Orientation</label>
+                            <select id="assemblyType" onchange="renderAssembly(); calculate();"
+                                    class="w-40 px-3 py-2 border border-gray-300 rounded-md text-sm">
+                              <option value="wall" selected>Wall (L → R)</option>
+                              <option value="roof">Roof (Top → Down)</option>
+                            </select>
+                        </div>
+                        <div class="ml-auto flex flex-wrap items-center gap-2">
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs font-medium text-gray-600">Prepared by:</label>
+                                <input type="text" id="preparedBy" placeholder="Your name"
+                                    class="w-40 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <button onclick="downloadProfessionalPDF()" class="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700 transition-colors shadow-md">📄 Download PDF Report</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="assembly-area" class="min-h-[400px] bg-gray-100 rounded-xl border-4 border-dashed border-gray-200 p-6">
+                </div>
+            </div>
+
+            <!-- Right: Results Panel -->
+            <div class="lg:col-span-3 space-y-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 sticky top-8">
+                    <h2 class="text-xl font-bold mb-6 text-gray-900">Performance</h2>
+                    <div class="space-y-4">
+                        <div class="flex flex-col border-b pb-2">
+                            <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider">Total R-Value</span>
+                            <span class="text-xl font-mono font-bold text-blue-600" id="res-r">0.000 m²·K/W</span>
+                        </div>
+                        <div class="flex flex-col border-b pb-2">
+                            <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider">U-Value</span>
+                            <span class="text-xl font-mono font-bold text-gray-800" id="res-u">0.000 W/m²·K</span>
+                        </div>
+                        <div class="flex flex-col border-b pb-2">
+                            <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider">Heat Loss (Φ)</span>
+                            <span class="text-xl font-mono font-bold text-red-600" id="res-q">0.0 W</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 pt-4 border-t border-gray-200">
+                        <h3 class="text-sm font-bold text-gray-700 mb-3">Temperature Distribution</h3>
+                        <div id="temp-breakdown" class="max-h-48 overflow-y-auto pr-2">
+                            <div class="text-xs text-gray-400 text-center py-4">Add layers to see temperature drops</div>
+                        </div>
+                    </div>
+
+                    <canvas id="visualization" width="300" height="500" class="mt-8 w-full border border-gray-100 rounded-lg bg-white"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const materials = [
+          { id: 'm1', name: 'Interior Convection (Wall)', h: 8, category: 'convection', color: '#60a5fa', isSurface: true },
+          { id: 'm2', name: 'Exterior Convection (Windy)', h: 25, category: 'convection', color: '#3b82f6', isSurface: true },
+          { id: 'm11', name: 'Still Air Cavity', k: 0.18, category: 'convection', color: '#cbd5e1', isSurface: false },
+          { id: 'm3', name: 'Fiberglass Batt', k: 0.04, category: 'insulation', color: '#f472b6' },
+          { id: 'm4', name: 'EPS Foam', k: 0.035, category: 'insulation', color: '#ec4899' },
+          { id: 'm5', name: 'Mineral Wool', k: 0.038, category: 'insulation', color: '#db2777' },
+          { id: 'm6', name: 'Common Brick', k: 0.72, category: 'masonry', color: '#9a3412' },
+          { id: 'm7', name: 'Concrete Block', k: 1.1, category: 'masonry', color: '#4b5563' },
+          { id: 'm8', name: 'Softwood Lumber', k: 0.12, category: 'wood', color: '#92400e' },
+          { id: 'm9', name: 'OSB / Plywood', k: 0.13, category: 'wood', color: '#b45309' },
+          { id: 'm10', name: 'Gypsum Board', k: 0.17, category: 'other', color: '#e5e7eb' },
+        ];
+
+        let assembly = [];
+        let sortableMain;
+        let lastSolution = null;
+
+        // --- HELPER FUNCTIONS ---
+        function matById(id){ return materials.find(m => m.id === id); }
+        
+        function getK(itemOrBranch){
+          const mat = matById(itemOrBranch.materialId);
+          const k = parseFloat(itemOrBranch.kUser);
+          return (isFinite(k) && k > 0) ? k : (parseFloat(mat?.k) || 0);
+        }
+        
+        function getH(itemOrBranch){
+          const mat = matById(itemOrBranch.materialId);
+          const h = parseFloat(itemOrBranch.hUser);
+          return (isFinite(h) && h > 0) ? h : (parseFloat(mat?.h) || 0);
+        }
+
+        function init() {
+            renderMaterials();
+            renderAssembly();
+            calculate();
+        }
+
+        function sumBranchAreas(group) {
+          return (group.branches || []).reduce((s, b) => s + (parseFloat(b.area) || 0), 0);
+        }
+
+        function renderMaterials() {
+          const containers = {
+            convection: document.getElementById('convection-materials'),
+            insulation: document.getElementById('insulation-materials'),
+            masonry: document.getElementById('masonry-materials'),
+            wood: document.getElementById('wood-materials'),
+            other: document.getElementById('other-materials')
+          };
+          Object.values(containers).forEach(c => { if(c) c.innerHTML = '' });
+          materials.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'material-card p-3 bg-white border border-gray-200 rounded-lg text-sm shadow-sm flex flex-col gap-1';
+            const propLine = m.isSurface
+              ? `<div class="text-[10px] text-gray-500 uppercase font-mono">h = ${m.h}</div>`
+              : `<div class="text-[10px] text-gray-500 uppercase font-mono">k = ${m.k}</div>`;
+            card.innerHTML = `<div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full" style="background:${m.color}"></div><span class="font-semibold text-gray-700">${m.name}</span></div>${propLine}<button onclick="addToAssembly('${m.id}')" class="mt-2 text-xs text-blue-600 font-medium hover:underline text-left">+ Add Layer</button>`;
+            if(containers[m.category]) containers[m.category].appendChild(card);
+          });
+        }
+
+        function filterMaterials(searchTerm) {
+          const term = searchTerm.toLowerCase().trim();
+          document.querySelectorAll('.material-card').forEach(card => card.style.display = card.textContent.toLowerCase().includes(term) ? '' : 'none');
+        }
+
+        function renderAssembly() {
+            const container = document.getElementById('assembly-area');
+            const orient = (document.getElementById('assemblyType')?.value) || 'wall';
+            container.innerHTML = '';
+            container.className = orient === 'wall' 
+                ? 'min-h-[400px] bg-gray-100 rounded-xl border-4 border-dashed border-gray-200 p-6 flex flex-row flex-nowrap gap-4 items-start overflow-x-auto pb-4'
+                : 'min-h-[400px] bg-gray-100 rounded-xl border-4 border-dashed border-gray-200 p-6 flex flex-col gap-4';
+
+            assembly.forEach(item => container.appendChild(item.type === 'series' ? createAssemblyItem(item) : createParallelGroup(item)));
+            initSortable(orient);
+        }
+
+        function initSortable(orient) {
+            const container = document.getElementById('assembly-area');
+            if(sortableMain) sortableMain.destroy();
+            sortableMain = new Sortable(container, {
+                animation: 150, handle: '.assembly-item, .parallel-group', direction: orient === 'wall' ? 'horizontal' : 'vertical',
+                onEnd: () => {
+                    const ids = Array.from(container.children).map(el => el.dataset.id);
+                    const pos = new Map(ids.map((id, i) => [id, i]));
+                    assembly.sort((a, b) => (pos.get(a.id) ?? 9999) - (pos.get(b.id) ?? 9999));
+                    calculate();
+                }
+            });
+        }
+
+        function createAssemblyItem(item) {
+          const mat = matById(item.materialId);
+          const div = document.createElement('div');
+          div.className = 'assembly-item shadow-sm';
+          div.dataset.id = item.id;
+          div.style.width = '220px';
+
+          if (!mat) return div;
+
+          const conductionBlock = `
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[9px] text-gray-500 uppercase tracking-wider">L (m)</label>
+                <input type="number" step="0.001" value="${item.thickness ?? 0.1}"
+                  onchange="updateItem('${item.id}', 'thickness', this.value)"
+                  class="w-full text-xs border border-gray-200 rounded-md p-1">
+              </div>
+              <div>
+                <label class="block text-[9px] text-gray-500 uppercase tracking-wider">k (W/m·K)</label>
+                <input type="number" step="0.001" value="${item.kUser ?? mat.k ?? ''}"
+                  onchange="updateItem('${item.id}', 'kUser', this.value)"
+                  class="w-full text-xs border border-gray-200 rounded-md p-1">
+              </div>
+            </div>
+            <div class="mt-2 text-[10px] text-gray-400">R'' = L/k</div>
+          `;
+
+          const convectionBlock = `
+            <div>
+              <label class="block text-[9px] text-gray-500 uppercase tracking-wider">h (W/m²·K)</label>
+              <input type="number" step="0.1" value="${item.hUser ?? mat.h ?? 8}"
+                onchange="updateItem('${item.id}', 'hUser', this.value)"
+                class="w-full text-xs border border-gray-200 rounded-md p-1">
+            </div>
+            <div class="mt-2 text-[10px] text-gray-400">R'' = 1/h</div>
+          `;
+
+          div.innerHTML = `
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-[9px] font-bold text-gray-400 uppercase">Series Layer</span>
+              <button onclick="remove('${item.id}')" class="text-gray-400 hover:text-red-500">×</button>
+            </div>
+
+            <select onchange="updateItem('${item.id}', 'materialId', this.value)"
+              class="w-full text-xs border border-gray-200 rounded-md mb-2 p-1">
+              ${materials.map(m => `<option value="${m.id}" ${m.id === item.materialId ? 'selected' : ''}>${m.name}</option>`).join('')}
+            </select>
+
+            ${mat.isSurface ? convectionBlock : conductionBlock}
+          `;
+          return div;
+        }
+
+        function createParallelGroup(group) {
+          const totalArea = parseFloat(document.getElementById('totalArea')?.value) || 1;
+          const sumA = sumBranchAreas(group);
+          
+          let badge = '';
+          if (sumA > totalArea + 1e-6) {
+            badge = `<div class="text-[10px] text-red-600 font-semibold">Warning: ΣA exceeds Total Area</div>`;
+          } else if (Math.abs(sumA - totalArea) > 1e-6) {
+            badge = `<div class="text-[10px] text-amber-700 font-semibold">Note: ΣA ≠ Total Area</div>`;
+          } else {
+            badge = `<div class="text-[10px] text-green-700 font-semibold">OK</div>`;
+          }
+
+          const div = document.createElement('div');
+          div.className = 'parallel-group shadow-sm'; div.dataset.id = group.id; div.style.width = '320px';
+
+          const branchHTML = group.branches.map(b => {
+              const bMat = matById(b.materialId);
+              return `
+                <div class="bg-white p-2 rounded border border-amber-200 mb-2">
+                    <div class="flex items-start gap-2 mb-1">
+                        <select onchange="updateItem('${b.id}', 'materialId', this.value, '${group.id}')" class="flex-1 text-[10px] border border-gray-100 rounded p-0.5">${materials.map(m => `<option value="${m.id}" ${m.id === b.materialId ? 'selected' : ''}>${m.name}</option>`).join('')}</select>
+                        <button onclick="remove('${b.id}', '${group.id}')" class="text-gray-300 hover:text-red-500 font-bold px-1">×</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                      ${bMat?.isSurface ? `
+                        <div>
+                          <label class="block text-[9px] text-gray-500 uppercase tracking-wider">h (W/m²·K)</label>
+                          <input type="number" step="0.1" value="${b.hUser ?? bMat.h ?? 8}"
+                            onchange="updateItem('${b.id}', 'hUser', this.value, '${group.id}')"
+                            class="w-full p-1 border border-gray-100 rounded text-[10px]">
+                        </div>
+                      ` : `
+                        <div>
+                          <label class="block text-[9px] text-gray-500 uppercase tracking-wider">L (m)</label>
+                          <input type="number" step="0.001" value="${b.thickness ?? 0.1}"
+                            onchange="updateItem('${b.id}', 'thickness', this.value, '${group.id}')"
+                            class="w-full p-1 border border-gray-100 rounded text-[10px]">
+                        </div>
+                        <div>
+                          <label class="block text-[9px] text-gray-500 uppercase tracking-wider">k (W/m·K)</label>
+                          <input type="number" step="0.001" value="${b.kUser ?? bMat.k ?? ''}"
+                            onchange="updateItem('${b.id}', 'kUser', this.value, '${group.id}')"
+                            class="w-full p-1 border border-gray-100 rounded text-[10px]">
+                        </div>
+                      `}
+                      <div class="col-span-2">
+                        <label class="block text-[9px] text-gray-500 uppercase tracking-wider">Area (m²)</label>
+                        <input type="number" step="0.01" value="${b.area ?? 0}"
+                          onchange="updateItem('${b.id}', 'area', this.value, '${group.id}')"
+                          class="w-full p-1 border border-gray-100 rounded text-[10px]">
+                      </div>
+                    </div>
+                </div>`;
+          }).join('');
+
+          div.innerHTML = `
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-[9px] font-bold text-amber-600 uppercase">Parallel Paths</span>
+              <button onclick="remove('${group.id}')" class="text-amber-400 hover:text-red-500">×</button>
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-[10px] text-amber-700">
+                ΣA = <span class="font-mono">${sumA.toFixed(3)}</span> m² <span class="text-gray-400">/</span> <span class="font-mono">${totalArea.toFixed(3)}</span> m²
+              </div>
+              ${badge}
+            </div>
+            <div class="max-h-[300px] overflow-y-auto">${branchHTML}</div>
+            <button onclick="addToParallel('${group.id}')" class="w-full py-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded border border-amber-200 hover:bg-amber-100">+ Add Branch</button>
+          `;
+          return div;
+        }
+
+        function calculateTemperatures(breakdown, rTotal, deltaT) {
+          let currentTemp = deltaT;
+          const tempData = [];
+          
+          breakdown.forEach((layer, idx) => {
+            const layerDeltaT = (layer.R / rTotal) * deltaT;
+            const startTemp = currentTemp;
+            const endTemp = currentTemp - layerDeltaT;
+            
+            tempData.push({
+              layerIndex: idx,
+              startTemp: startTemp,
+              endTemp: endTemp,
+              deltaT: layerDeltaT,
+              name: layer.name,
+              type: layer.type
+            });
+            
+            currentTemp = endTemp;
+          });
+          
+          return tempData;
+        }
+
+        function calculate() {
+          const deltaT = parseFloat(document.getElementById('deltaT').value) || 0;
+          const totalArea = parseFloat(document.getElementById('totalArea').value) || 1;
+
+          let rTotal = 0;
+          const breakdown = [];
+
+          assembly.forEach(item => {
+            if (item.type === 'series') {
+              const mat = matById(item.materialId);
+              let rpp = 0;
+              if (mat.isSurface) {
+                const h = getH(item);
+                rpp = (h > 0) ? (1 / h) : 0;
+              } else {
+                const k = getK(item);
+                const L = parseFloat(item.thickness) || 0;
+                rpp = (k > 0) ? (L / k) : 0;
+              }
+              rTotal += rpp;
+              breakdown.push({ type: 'series', name: mat.name, R: rpp, material: mat });
+            } else {
+              const sumA = sumBranchAreas(item);
+              const areaOk = Math.abs(sumA - totalArea) < 1e-6;
+              const areaExceeded = sumA > totalArea + 1e-6;
+
+              let UA = 0;
+              item.branches.forEach(b => {
+                const mat = matById(b.materialId);
+                const A = parseFloat(b.area) || 0;
+                if (A <= 0) return;
+
+                let rpp = 0;
+                if (mat.isSurface) {
+                  const h = getH(b);
+                  rpp = (h > 0) ? (1 / h) : 0;
+                } else {
+                  const k = getK(b);
+                  const L = parseFloat(b.thickness) || 0;
+                  rpp = (k > 0) ? (L / k) : 0;
+                }
+
+                if (rpp > 0) UA += (1 / rpp) * A;
+              });
+
+              if (UA > 0) {
+                const effectiveRpp = totalArea / UA;
+                rTotal += effectiveRpp;
+
+                breakdown.push({
+                  type: 'parallel',
+                  name: 'Parallel Group',
+                  R: effectiveRpp,
+                  areaSum: sumA,
+                  warnExceeded: areaExceeded,
+                  warnMismatch: !areaOk,
+                  details: item.branches.map(b => ({
+                    name: materials.find(m => m.id === b.materialId).name,
+                    area: parseFloat(b.area) || 0,
+                    color: materials.find(m => m.id === b.materialId).color
+                  }))
+                });
+              } else if (item.branches.length > 0) {
+                breakdown.push({ type: 'parallel', name: 'Parallel (Empty/No A)', R: 0.001, details: [] });
+              }
+            }
+          });
+
+          const uValue = rTotal > 0 ? 1 / rTotal : 0;
+          const q = uValue * totalArea * deltaT;
+          
+          const tempData = calculateTemperatures(breakdown, rTotal, deltaT);
+
+          document.getElementById('res-r').textContent = rTotal.toFixed(3) + ' m²·K/W';
+          document.getElementById('res-u').textContent = uValue.toFixed(3) + ' W/m²·K';
+          document.getElementById('res-q').textContent = q.toFixed(1) + ' W';
+          
+          lastSolution = {
+            timestamp: new Date().toISOString(),
+            inputs: {
+              deltaT,
+              totalArea,
+              orientation: (document.getElementById('assemblyType')?.value) || 'wall'
+            },
+            results: {
+              R_total: rTotal,
+              U_value: uValue,
+              Q_heat_loss_W: q
+            },
+            breakdown: breakdown,
+            temperatureData: tempData,
+            assembly: (typeof structuredClone === "function")
+              ? structuredClone(assembly)
+              : JSON.parse(JSON.stringify(assembly))
+          };
+
+          drawVisualization(breakdown, rTotal, lastSolution.inputs.orientation, tempData, deltaT);
+          updateTemperaturePanel(tempData);
+        }
+
+        function updateTemperaturePanel(tempData) {
+          const panel = document.getElementById('temp-breakdown');
+          if (!panel || !tempData || tempData.length === 0) return;
+          
+          let html = '';
+          tempData.forEach((t, idx) => {
+            html += `
+              <div class="text-xs border-b border-gray-100 pb-2 mb-2">
+                <div class="font-semibold text-gray-700">${idx + 1}. ${t.name}</div>
+                <div class="flex justify-between mt-1">
+                  <span class="text-gray-500">T₁→T₂:</span>
+                  <span class="font-mono text-gray-800">${t.startTemp.toFixed(1)}°C → ${t.endTemp.toFixed(1)}°C</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">ΔT:</span>
+                  <span class="font-mono text-blue-600 font-semibold">${t.deltaT.toFixed(2)}°C</span>
+                </div>
+              </div>
+            `;
+          });
+          
+          panel.innerHTML = html;
+        }
+
+        function drawVisualization(breakdown, rTotal, orient, tempData, deltaT) {
+            const canvas = document.getElementById('visualization');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!breakdown || rTotal <= 0) return;
+            
+            ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#111827'; ctx.fillText('Thermal Section Profile', 12, 22);
+            
+            const left = 20, top = 40;
+            if (orient === 'roof') {
+                const width = canvas.width - 40; let y = top;
+                breakdown.forEach((b, idx) => {
+                    const h = Math.max(25, (b.R / rTotal) * (canvas.height - 120));
+                    ctx.fillStyle = (b.material?.color || '#94a3b8') + '22'; 
+                    ctx.fillRect(left, y, width, h);
+                    ctx.strokeStyle = b.material?.color || '#94a3b8'; 
+                    ctx.strokeRect(left, y, width, h);
+                    
+                    ctx.fillStyle = '#374151';
+                    ctx.font = 'bold 9px sans-serif';
+                    ctx.fillText(b.type === 'parallel' ? 'Parallel' : 'Series', left + 8, y + 12);
+                    
+                    // Add temperature labels
+                    if (tempData && tempData[idx]) {
+                        ctx.fillStyle = '#dc2626';
+                        ctx.font = 'bold 8px sans-serif';
+                        ctx.fillText(`ΔT = ${tempData[idx].deltaT.toFixed(1)}°C`, width - 40, y + 12);
+                    }
+                    
+                    if (b.type === 'parallel' && b.details && b.details.length > 0) {
+                        const totalArea = parseFloat(document.getElementById('totalArea')?.value) || 1;
+                        const sumA = b.details.reduce((s, d) => s + d.area, 0) || 1;
+                        let x0 = left + 4;
+                        const availWidth = width - 8;
+                        
+                        b.details.forEach(d => {
+                            const w = Math.max(30, availWidth * (d.area / Math.max(sumA, totalArea)));
+                            ctx.fillStyle = (d.color || '#fff') + '22'; 
+                            ctx.fillRect(x0, y + 18, w - 3, h - 22);
+                            ctx.strokeStyle = d.color || '#fdba74'; 
+                            ctx.strokeRect(x0, y + 18, w - 3, h - 22);
+                            ctx.fillStyle = '#7c2d12'; 
+                            ctx.font = '8px sans-serif'; 
+                            ctx.fillText(d.name.substring(0, 8), x0 + 4, y + 28);
+                            x0 += w;
+                        });
+                    } else if (b.type === 'series') {
+                        ctx.fillStyle = '#4b5563'; 
+                        ctx.font = '10px sans-serif'; 
+                        ctx.fillText(b.name.substring(0, 30), left + 8, y + 25);
+                    }
+                    y += h + 4;
+                });
+            } else {
+                const height = 380, usableW = canvas.width - 40; let x = left;
+                breakdown.forEach((b, idx) => {
+                    const w = Math.max(40, (b.R / rTotal) * usableW);
+                    ctx.fillStyle = (b.material?.color || '#94a3b8') + '11'; 
+                    ctx.fillRect(x, top, w, height); 
+                    ctx.strokeStyle = b.material?.color || '#94a3b8'; 
+                    ctx.strokeRect(x, top, w, height);
+                    
+                    ctx.fillStyle = '#374151';
+                    ctx.font = 'bold 9px sans-serif';
+                    ctx.fillText(b.type === 'parallel' ? 'Parallel' : 'Series', x + 4, top + 12);
+                    
+                    // Add temperature labels
+                    if (tempData && tempData[idx]) {
+                        ctx.fillStyle = '#dc2626';
+                        ctx.font = 'bold 8px sans-serif';
+                        ctx.fillText(`ΔT=${tempData[idx].deltaT.toFixed(1)}°C`, x + 4, top + height - 8);
+                    }
+
+                    if (b.type === 'parallel') {
+                        const totalArea = parseFloat(document.getElementById('totalArea')?.value) || 1;
+                        const sumA = b.details.length > 0 ? b.details.reduce((s, d) => s + d.area, 0) : 1; 
+                        let y0 = top + 22;
+                        b.details.forEach(d => {
+                            const h = Math.max(18, (height - 28) * (d.area / Math.max(sumA, totalArea)));
+                            ctx.fillStyle = (d.color || '#fff') + '22'; ctx.fillRect(x+4, y0, w-8, h-3);
+                            ctx.strokeStyle = d.color || '#fdba74'; ctx.strokeRect(x+4, y0, w-8, h-3);
+                            ctx.fillStyle = '#7c2d12'; ctx.font = '9px sans-serif'; ctx.fillText(d.name.substring(0, 10), x+8, y0+10);
+                            y0 += h;
+                        });
+                    }
+                    x += w + 4;
+                });
+            }
+
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '10px sans-serif';
+            ctx.fillText('Block width ∝ R-share. Parallel split by area.', 12, canvas.height - 10);
+        }
+
+        function addToAssembly(id) {
+          const mat = matById(id);
+          assembly.push({
+            id: crypto.randomUUID(),
+            type: 'series',
+            materialId: id,
+            thickness: mat.isSurface ? 0 : 0.1,
+            kUser: mat.isSurface ? null : (mat.k ?? null),
+            hUser: mat.isSurface ? (mat.h ?? null) : null
+          });
+          renderAssembly(); calculate();
+        }
+
+        function addToParallel(gid) {
+          const g = assembly.find(a => a.id === gid);
+          const defId = materials.find(m => m.category === 'insulation')?.id || materials[0].id;
+          const mat = matById(defId);
+
+          g.branches.push({
+            id: crypto.randomUUID(),
+            materialId: defId,
+            thickness: mat.isSurface ? 0 : 0.1,
+            area: 0,
+            kUser: mat.isSurface ? null : (mat.k ?? null),
+            hUser: mat.isSurface ? (mat.h ?? null) : null
+          });
+
+          renderAssembly(); calculate();
+        }
+
+        function updateItem(id, field, val, gid = null) {
+          const t = gid
+            ? assembly.find(a => a.id === gid)?.branches.find(b => b.id === id)
+            : assembly.find(a => a.id === id);
+
+          if (!t) return;
+
+          if (field === 'materialId') {
+            t.materialId = val;
+            const mat = matById(val);
+
+            if (mat?.isSurface) {
+              t.thickness = 0;
+              t.kUser = null;
+              t.hUser = (mat.h ?? 8);
+            } else {
+              t.hUser = null;
+              t.thickness = (parseFloat(t.thickness) > 0 ? t.thickness : 0.1);
+              t.kUser = (mat?.k ?? t.kUser ?? 0.1);
+            }
+
+            renderAssembly(); calculate();
+            return;
+          }
+
+          t[field] = parseFloat(val);
+          renderAssembly();
+          calculate();
+        }
+
+        function remove(id, gid = null) {
+            if (gid) {
+              const g = assembly.find(a => a.id === gid); g.branches = g.branches.filter(b => b.id !== id);
+            } else { assembly = assembly.filter(a => a.id !== id); }
+            renderAssembly(); calculate();
+        }
+
+        function addParallelGroup() { assembly.push({ id: crypto.randomUUID(), type: 'parallel', branches: [] }); renderAssembly(); calculate(); }
+        function clearAssembly() { assembly = []; renderAssembly(); calculate(); }
+
+        // --- PROFESSIONAL PDF EXPORT ---
+        async function downloadProfessionalPDF() {
+          if (!lastSolution) calculate();
+          
+          // Prompt for name
+          const typedName = (document.getElementById('preparedBy')?.value || '').trim();
+          const preparedBy = prompt('Report will show "Prepared by:". Enter your name:', typedName) || typedName || '—';
+          
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF('p', 'mm', 'letter');
+          
+          const pageWidth = doc.internal.pageSize.getWidth();
+          const pageHeight = doc.internal.pageSize.getHeight();
+          const margin = 20;
+          let yPos = margin;
+          
+          // --- HEADER ---
+          doc.setFillColor(37, 99, 235);
+          doc.rect(0, 0, pageWidth, 50, 'F');
+          
+          // Add decorative accent bar
+          doc.setFillColor(29, 78, 216);
+          doc.rect(0, 0, pageWidth, 8, 'F');
+          
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(26);
+          doc.setFont('helvetica', 'bold');
+          doc.text('THERMAL ASSEMBLY ANALYSIS', margin, 22);
+          
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'normal');
+          doc.text('Advanced Heat Transfer Calculation Report', margin, 31);
+          
+          // Prepared by line
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          doc.text('SMART BUILDING ENERGY DYNAMICS LAB', margin, 40);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`Prepared by: ${preparedBy}`, margin, 46);
+          
+          // Date on the right
+          const dateStr = new Date(lastSolution.timestamp).toLocaleString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          });
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(220, 230, 255);
+          doc.text(`Generated: ${dateStr}`, pageWidth - margin - 65, 46);
+          
+          yPos = 60;
+          
+          // --- SUMMARY BOX ---
+          doc.setDrawColor(200, 200, 200);
+          doc.setFillColor(249, 250, 251);
+          doc.roundedRect(margin, yPos, pageWidth - 2*margin, 32, 2, 2, 'FD');
+          
+          doc.setTextColor(55, 65, 81);
+          doc.setFontSize(12);
+          doc.setFont('helvetica', 'bold');
+          doc.text('PERFORMANCE SUMMARY', margin + 5, yPos + 8);
+          
+          const col1X = margin + 8;
+          const col2X = margin + 68;
+          const col3X = margin + 130;
+          const summaryY = yPos + 17;
+          
+          // Column 1 - R-Value
+          doc.setTextColor(100, 100, 100);
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          doc.text('Total R-Value:', col1X, summaryY);
+          doc.setTextColor(37, 99, 235);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(14);
+          doc.text(lastSolution.results.R_total.toFixed(4), col1X, summaryY + 7);
+          doc.setFontSize(8);
+          doc.setTextColor(100, 100, 100);
+          doc.text('m²·K/W', col1X, summaryY + 12);
+          
+          // Column 2 - U-Value
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.text('U-Value:', col2X, summaryY);
+          doc.setTextColor(55, 65, 81);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(14);
+          doc.text(lastSolution.results.U_value.toFixed(4), col2X, summaryY + 7);
+          doc.setFontSize(8);
+          doc.setTextColor(100, 100, 100);
+          doc.text('W/m²·K', col2X, summaryY + 12);
+          
+          // Column 3 - Heat Loss
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.text('Heat Loss (Φ):', col3X, summaryY);
+          doc.setTextColor(220, 38, 38);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(14);
+          doc.text(lastSolution.results.Q_heat_loss_W.toFixed(2), col3X, summaryY + 7);
+          doc.setFontSize(8);
+          doc.setTextColor(100, 100, 100);
+          doc.text('W', col3X, summaryY + 12);
+          
+          yPos += 42;
+          
+          // --- INPUT PARAMETERS ---
+          doc.setTextColor(17, 24, 39);
+          doc.setFontSize(13);
+          doc.setFont('helvetica', 'bold');
+          doc.text('INPUT PARAMETERS', margin, yPos);
+          yPos += 3;
+          
+          doc.setDrawColor(200, 200, 200);
+          doc.setLineWidth(0.5);
+          doc.line(margin, yPos, pageWidth - margin, yPos);
+          yPos += 7;
+          
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(55, 65, 81);
+          
+          doc.text(`Temperature Difference (ΔT):`, margin + 5, yPos);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${lastSolution.inputs.deltaT.toFixed(1)} °C`, margin + 85, yPos);
+          yPos += 7;
+          
+          doc.setFont('helvetica', 'normal');
+          doc.text(`Total Surface Area:`, margin + 5, yPos);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${lastSolution.inputs.totalArea.toFixed(3)} m²`, margin + 85, yPos);
+          yPos += 7;
+          
+          doc.setFont('helvetica', 'normal');
+          doc.text(`Assembly Orientation:`, margin + 5, yPos);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${lastSolution.inputs.orientation === 'wall' ? 'Wall (Horizontal Heat Flow)' : 'Roof (Vertical Heat Flow)'}`, margin + 85, yPos);
+          yPos += 12;
+          
+          // --- LAYER BREAKDOWN ---
+          doc.setTextColor(17, 24, 39);
+          doc.setFontSize(13);
+          doc.setFont('helvetica', 'bold');
+          doc.text('ASSEMBLY LAYER BREAKDOWN', margin, yPos);
+          yPos += 3;
+          
+          doc.setDrawColor(200, 200, 200);
+          doc.line(margin, yPos, pageWidth - margin, yPos);
+          yPos += 8;
+          
+          // Table header
+          doc.setFillColor(243, 244, 246);
+          doc.rect(margin, yPos - 5, pageWidth - 2*margin, 7, 'F');
+          
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(55, 65, 81);
+          doc.text('Layer Description', margin + 3, yPos);
+          doc.text('Type', margin + 75, yPos);
+          doc.text('R-Value', margin + 105, yPos);
+          doc.text('ΔT (°C)', margin + 135, yPos);
+          doc.text('% Total', margin + 160, yPos);
+          yPos += 7;
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.setLineWidth(0.3);
+          
+          let layerNum = 1;
+          lastSolution.breakdown.forEach((layer, idx) => {
+            if (yPos > pageHeight - 40) {
+              doc.addPage();
+              yPos = margin + 10;
+            }
+            
+            const rPercent = (layer.R / lastSolution.results.R_total * 100).toFixed(1);
+            const tempInfo = lastSolution.temperatureData[idx];
+            const layerDeltaT = tempInfo ? tempInfo.deltaT.toFixed(2) : '—';
+            
+            // Draw subtle row separator
+            if (idx > 0) {
+              doc.setDrawColor(230, 230, 230);
+              doc.line(margin + 2, yPos - 3, pageWidth - margin - 2, yPos - 3);
+            }
+            
+            if (layer.type === 'series') {
+              doc.setTextColor(31, 41, 55);
+              doc.text(`${layerNum}. ${layer.name}`, margin + 3, yPos);
+              doc.text('Series', margin + 75, yPos);
+              doc.text(layer.R.toFixed(4), margin + 105, yPos);
+              doc.setTextColor(220, 38, 38);
+              doc.text(layerDeltaT, margin + 135, yPos);
+              doc.setTextColor(31, 41, 55);
+              doc.text(`${rPercent}%`, margin + 160, yPos);
+              layerNum++;
+              yPos += 7;
+            } else {
+              doc.setTextColor(146, 64, 14);
+              doc.text(`${layerNum}. Parallel Thermal Bridge`, margin + 3, yPos);
+              doc.text('Parallel', margin + 75, yPos);
+              doc.text(layer.R.toFixed(4), margin + 105, yPos);
+              doc.setTextColor(220, 38, 38);
+              doc.text(layerDeltaT, margin + 135, yPos);
+              doc.setTextColor(146, 64, 14);
+              doc.text(`${rPercent}%`, margin + 160, yPos);
+              yPos += 6;
+              
+              if (layer.details && layer.details.length > 0) {
+                doc.setFontSize(8);
+                doc.setTextColor(120, 113, 108);
+                layer.details.forEach(detail => {
+                  if (yPos > pageHeight - 40) {
+                    doc.addPage();
+                    yPos = margin + 10;
+                  }
+                  doc.text(`   • ${detail.name}`, margin + 8, yPos);
+                  doc.text(`${detail.area.toFixed(3)} m²`, margin + 105, yPos);
+                  yPos += 5;
+                });
+                doc.setFontSize(9);
+                yPos += 2;
+              }
+              
+              layerNum++;
+            }
+          });
+          
+          // --- ADD VISUALIZATION IMAGE ---
+          yPos += 5;
+          
+          if (yPos > pageHeight - 130) {
+            doc.addPage();
+            yPos = margin + 10;
+          }
+          
+          doc.setTextColor(17, 24, 39);
+          doc.setFontSize(13);
+          doc.setFont('helvetica', 'bold');
+          doc.text('THERMAL SECTION VISUALIZATION', margin, yPos);
+          yPos += 3;
+          
+          doc.setDrawColor(200, 200, 200);
+          doc.line(margin, yPos, pageWidth - margin, yPos);
+          yPos += 10;
+          
+          const canvas = document.getElementById('visualization');
+          if (canvas) {
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 150;
+            const imgHeight = (canvas.height / canvas.width) * imgWidth;
+            
+            // Center the image
+            const imgX = (pageWidth - imgWidth) / 2;
+            doc.addImage(imgData, 'PNG', imgX, yPos, imgWidth, imgHeight);
+          }
+          
+          // --- FOOTER ON EACH PAGE ---
+          const totalPages = doc.internal.getNumberOfPages();
+          for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            const footerY = pageHeight - 12;
+            doc.setDrawColor(200, 200, 200);
+            doc.setLineWidth(0.3);
+            doc.line(margin, footerY - 3, pageWidth - margin, footerY - 3);
+            
+            doc.setFontSize(8);
+            doc.setTextColor(120, 120, 120);
+            doc.setFont('helvetica', 'normal');
+            doc.text('SMART BUILDING ENERGY DYNAMICS LAB', margin, footerY);
+            doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 20, footerY);
+          }
+          
+          // Save
+          const filename = `Thermal_Assembly_Report_${new Date().toISOString().slice(0,10)}.pdf`;
+          doc.save(filename);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
