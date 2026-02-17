@@ -195,11 +195,14 @@ function logToSheet(eventType) {
   };
 
   fetch(SHEET_WEBAPP_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  }).catch(() => {});
+  method: "POST",
+  headers: { "Content-Type": "text/plain;charset=utf-8" }, // important for GAS
+  body: JSON.stringify(payload)
+})
+.then(r => r.text())
+.then(t => console.log("Logger response:", t))
+.catch(err => console.error("Logger error:", err));
+
 }
 
         const materials = [
