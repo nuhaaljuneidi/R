@@ -126,7 +126,9 @@
                             <div class="flex items-center gap-2">
                                 <label class="text-xs font-medium text-gray-600">Prepared by:</label>
                                 <input type="text" id="preparedBy" placeholder="Your name"
-                                    class="w-40 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    class="w-40 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    onblur="logToSheet('name_entered')">
+
                             </div>
                             <button onclick="downloadProfessionalPDF()" class="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700 transition-colors shadow-md">📄 Download PDF Report</button>
                         </div>
@@ -170,6 +172,36 @@
     </div>
 
     <script>
+        const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxm4pSQ5xcPWcJZ5WDT32bCTM0KlK7Sr8DOt_rtdvChJpy57jYxMUi-RGw8UokBhvqI/exec";
+const TOOL_NAME = "thermal_assembly_designer";
+function logToSheet(eventType) {
+  const name = (document.getElementById('preparedBy')?.value || '').trim();
+  if (!name) return;
+
+  if (!lastSolution) calculate();
+
+  const payload = {
+    tool_name: TOOL_NAME,
+    event: eventType,
+    name,
+    page_url: window.location.href,
+    Thot: lastSolution?.inputs?.Thot ?? null,
+    Tcold: lastSolution?.inputs?.Tcold ?? null,
+    area_m2: lastSolution?.inputs?.totalArea ?? null,
+    R_total: lastSolution?.results?.R_total ?? null,
+    U_value: lastSolution?.results?.U_value ?? null,
+    Q_heat_loss_W: lastSolution?.results?.Q_heat_loss_W ?? null,
+    assembly: lastSolution?.assembly ?? null
+  };
+
+  fetch(SHEET_WEBAPP_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+}
+
         const materials = [
           { id: 'm1', name: 'Interior Convection (Wall)', h: 8, category: 'convection', color: '#60a5fa', isSurface: true },
           { id: 'm2', name: 'Exterior Convection (Windy)', h: 25, category: 'convection', color: '#3b82f6', isSurface: true },
@@ -710,6 +742,9 @@
           // Prompt for name
           const typedName = (document.getElementById('preparedBy')?.value || '').trim();
           const preparedBy = prompt('Report will show "Prepared by:". Enter your name:', typedName) || typedName || '—';
+            document.getElementById('preparedBy').value = preparedBy; // keep the input updated
+logToSheet('pdf_downloaded');
+
           
           const { jsPDF } = window.jspdf;
           const doc = new jsPDF('p', 'mm', 'letter');
