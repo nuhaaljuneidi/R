@@ -194,14 +194,13 @@ function logToSheet(eventType) {
     assembly: lastSolution?.assembly ?? null
   };
 
-  fetch(SHEET_WEBAPP_URL, {
+fetch(SHEET_WEBAPP_URL, {
   method: "POST",
-  headers: { "Content-Type": "text/plain;charset=utf-8" }, // important for GAS
+  mode: "no-cors",
+  headers: { "Content-Type": "text/plain;charset=utf-8" }, // keep this for GAS
   body: JSON.stringify(payload)
-})
-.then(r => r.text())
-.then(t => console.log("Logger response:", t))
-.catch(err => console.error("Logger error:", err));
+}).catch(err => console.error("Logger error:", err));
+
 
 }
 
